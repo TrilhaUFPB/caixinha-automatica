@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #2563eb; padding: 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">🎯 Caixinha do Trilha</h1>
+                        </td>
+                    </tr>
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 30px;">
+                            <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+                                Olá, <strong>{{name}}</strong>!
+                            </p>
+                            <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+                                A cobrança mensal da caixinha do Trilha foi gerada. Segue abaixo o QR Code PIX para pagamento:
+                            </p>
+                            
+                            <!-- Amount Box -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                                <tr>
+                                    <td align="center">
+                                        <div style="background-color: #f0f9ff; border: 2px solid #2563eb; border-radius: 8px; padding: 20px; display: inline-block;">
+                                            <p style="margin: 0; font-size: 14px; color: #666;">Valor:</p>
+                                            <p style="margin: 5px 0 0 0; font-size: 32px; font-weight: bold; color: #2563eb;">R$ {{amount}}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- QR Code -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                                <tr>
+                                    <td align="center">
+                                        <img src="{{qr_code_base64}}" alt="QR Code PIX" style="max-width: 250px; border-radius: 8px;">
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- PIX Code -->
+                            <p style="font-size: 14px; color: #666; margin-bottom: 10px; text-align: center;">
+                                Ou copie o código PIX abaixo:
+                            </p>
+                            <div style="background-color: #f5f5f5; border-radius: 6px; padding: 15px; margin-bottom: 25px; word-break: break-all;">
+                                <code style="font-size: 12px; color: #333;">{{pix_code}}</code>
+                            </div>
+
+                            <!-- Due Date -->
+                            <p style="font-size: 14px; color: #666; text-align: center; margin-bottom: 20px;">
+                                ⏰ Vencimento: <strong>{{due_date}}</strong>
+                            </p>
+
+                            <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
+
+                            <p style="font-size: 14px; color: #888; text-align: center;">
+                                Dúvidas? Fale com a diretoria do Trilha.
+                            </p>
+                        </td>
+                    </tr>
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 20px; text-align: center;">
+                            <p style="font-size: 12px; color: #888; margin: 0;">
+                                Trilha - Empresa Júnior de Computação da UFPB
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
