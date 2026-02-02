@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -25,10 +27,14 @@ class SheetsService:
     def __init__(
         self,
         credentials_path: Optional[str] = None,
+        credentials_base64: Optional[str] = None,
         spreadsheet_id: Optional[str] = None,
     ):
         self.credentials_path = credentials_path or os.getenv(
             "GOOGLE_CREDENTIALS_PATH", "credentials.json"
+        )
+        self.credentials_base64 = credentials_base64 or os.getenv(
+            "GOOGLE_CREDENTIALS_BASE64"
         )
         self.spreadsheet_id = spreadsheet_id or os.getenv("SPREADSHEET_ID")
 
@@ -43,9 +49,18 @@ class SheetsService:
     def _get_client(self) -> gspread.Client:
         if self._client is None:
             try:
-                credentials = Credentials.from_service_account_file(
-                    self.credentials_path, scopes=self.SCOPES
-                )
+                if self.credentials_base64:
+                    credentials_json = base64.b64decode(self.credentials_base64).decode("utf-8")
+                    credentials_info = json.loads(credentials_json)
+                    credentials = Credentials.from_service_account_info(
+                        credentials_info, scopes=self.SCOPES
+                    )
+                    logger.info("Authenticated using base64 credentials")
+                else:
+                    credentials = Credentials.from_service_account_file(
+                        self.credentials_path, scopes=self.SCOPES
+                    )
+                    logger.info("Authenticated using credentials file")
                 self._client = gspread.authorize(credentials)
                 logger.info("Successfully authenticated with Google Sheets API")
             except FileNotFoundError:
