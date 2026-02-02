@@ -1,22 +1,82 @@
-import hashlib
-import hmac
+import base64
 import json
 import logging
 import os
-import sys
 from datetime import date
 from http.server import BaseHTTPRequestHandler
+from typing import Optional
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.services.sheets import SheetsService
-from src.utils.business_days import get_month_name_pt
+import gspread
+from google.oauth2.service_account import Credentials
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 EFI_WEBHOOK_IPS = {"34.193.116.226"}
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+
+MONTHS_PT = {
+    1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+    5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+    9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro",
+}
+
+
+class SheetsService:
+    SCOPES = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+
+    def __init__(self):
+        self.credentials_base64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+        self.spreadsheet_id = os.getenv("SPREADSHEET_ID")
+        self._client: Optional[gspread.Client] = None
+        self._spreadsheet = None
+
+    def _get_client(self) -> gspread.Client:
+        if self._client is None:
+            credentials_json = base64.b64decode(self.credentials_base64).decode("utf-8")
+            credentials_info = json.loads(credentials_json)
+            credentials = Credentials.from_service_account_info(
+                credentials_info, scopes=self.SCOPES
+            )
+            self._client = gspread.authorize(credentials)
+        return self._client
+
+    def _get_spreadsheet(self):
+        if self._spreadsheet is None:
+            client = self._get_client()
+            self._spreadsheet = client.open_by_key(self.spreadsheet_id)
+        return self._spreadsheet
+
+    def get_members(self, sheet_name: str = "Sheet1") -> list:
+        spreadsheet = self._get_spreadsheet()
+        worksheet = spreadsheet.worksheet(sheet_name)
+        return worksheet.get_all_records()
+
+    def mark_as_paid(self, name: str, month: str, sheet_name: str = "Sheet1") -> bool:
+        spreadsheet = self._get_spreadsheet()
+        worksheet = spreadsheet.worksheet(sheet_name)
+        headers = worksheet.row_values(1)
+        
+        name_col = None
+        month_col = None
+        for idx, header in enumerate(headers, start=1):
+            if header in ["Nome", "Name"]:
+                name_col = idx
+            if header == month:
+                month_col = idx
+
+        if name_col is None or month_col is None:
+            return False
+
+        name_cells = worksheet.col_values(name_col)
+        for idx, cell_name in enumerate(name_cells, start=1):
+            if cell_name == name:
+                worksheet.update_cell(idx, month_col, "Paid")
+                return True
+        return False
 
 
 def validate_request(headers: dict, query_params: dict, client_ip: str) -> bool:
@@ -38,7 +98,7 @@ def validate_request(headers: dict, query_params: dict, client_ip: str) -> bool:
 
 def get_current_month_column() -> str:
     today = date.today()
-    month_name = get_month_name_pt(today.month)
+    month_name = MONTHS_PT.get(today.month, "")
     return f"{month_name}/{today.year}"
 
 
@@ -60,10 +120,12 @@ def process_pix_payment(pix_data: dict) -> dict:
 
         member_name = None
         for member in members:
-            for month_col, status in member.payment_status.items():
-                if isinstance(status, str) and txid in status:
-                    member_name = member.name
-                    break
+            name = member.get("Nome", member.get("Name", ""))
+            for key, value in member.items():
+                if key not in ["Nome", "Name", "Email"]:
+                    if isinstance(value, str) and txid in value:
+                        member_name = name
+                        break
             if member_name:
                 break
 
