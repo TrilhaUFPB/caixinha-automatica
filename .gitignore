@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Credentials and secrets
+*.json
+!package.json
+.env
+*.p12
+*.pem
