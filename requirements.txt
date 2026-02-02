@@ -1,0 +1,6 @@
+efipay>=1.0.7
+google-auth>=2.48.0
+gspread>=6.2.1
+holidays>=0.40
+requests>=2.32.5
+resend>=2.21.0
