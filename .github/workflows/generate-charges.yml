@@ -1,0 +1,56 @@
+name: Generate Charges
+
+on:
+  schedule:
+    # Runs at 12:00 UTC (9:00 AM BRT) on days 1-10 of each month
+    # The job itself checks if it's the 5th business day
+    - cron: '0 12 1-10 * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force execution even if not the 5th business day'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  generate-charges:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Setup Google credentials
+        run: |
+          echo "${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}" | base64 -d > credentials.json
+
+      - name: Run charge generation job
+        env:
+          EFI_CLIENT_ID: ${{ secrets.EFI_CLIENT_ID }}
+          EFI_CLIENT_SECRET: ${{ secrets.EFI_CLIENT_SECRET }}
+          EFI_CERTIFICATE_BASE64: ${{ secrets.EFI_CERTIFICATE_BASE64 }}
+          EFI_PIX_KEY: ${{ secrets.EFI_PIX_KEY }}
+          GOOGLE_CREDENTIALS_PATH: credentials.json
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            python -m src.jobs.generate_charges --force
+          else
+            python -m src.jobs.generate_charges
+          fi
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f credentials.json
