@@ -1,9 +1,6 @@
-cffi>=1.16.0
-cryptography>=42.0.0
+# Dependencies for GitHub Actions 
 efipay>=1.0.7
 google-auth>=2.48.0
-google-auth-oauthlib>=1.2.0
-google-auth-httplib2>=0.2.0
 gspread>=6.2.1
 holidays>=0.40
 requests>=2.32.5
