@@ -1,9 +1,10 @@
 import logging
 import os
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Optional
-
-import resend
 
 logger = logging.getLogger(__name__)
 
@@ -13,18 +14,19 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 class EmailService:
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        from_email: Optional[str] = None,
+        smtp_email: Optional[str] = None,
+        smtp_password: Optional[str] = None,
+        smtp_host: Optional[str] = None,
+        smtp_port: Optional[int] = None,
     ):
-        self.api_key = api_key or os.getenv("RESEND_API_KEY")
-        self.from_email = from_email or os.getenv(
-            "EMAIL_FROM", "Caixinha Trilha <caixinha@trilhaufpb.com.br>"
-        )
+        self.smtp_email = smtp_email or os.getenv("SMTP_EMAIL")
+        self.smtp_password = smtp_password or os.getenv("SMTP_PASSWORD")
+        self.smtp_host = smtp_host or os.getenv("SMTP_HOST", "smtp.gmail.com")
+        self.smtp_port = smtp_port or int(os.getenv("SMTP_PORT", "587"))
+        self.from_name = os.getenv("EMAIL_FROM_NAME", "Caixinha Trilha")
 
-        if not self.api_key:
-            logger.warning("Resend API key not configured")
-        else:
-            resend.api_key = self.api_key
+        if not self.smtp_email or not self.smtp_password:
+            logger.warning("SMTP credentials not configured")
 
     def _load_template(self, template_name: str) -> str:
         template_path = TEMPLATES_DIR / template_name
@@ -37,6 +39,28 @@ class EmailService:
             template = template.replace(f"{{{{{key}}}}}", str(value))
         return template
 
+    def _send_email(self, to: str, subject: str, html_content: str) -> bool:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{self.from_name} <{self.smtp_email}>"
+            msg["To"] = to
+
+            html_part = MIMEText(html_content, "html")
+            msg.attach(html_part)
+
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_email, self.smtp_password)
+                server.sendmail(self.smtp_email, to, msg.as_string())
+
+            logger.info(f"Email sent to {to}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to send email to {to}: {e}")
+            raise
+
     def send_charge_email(
         self,
         to: str,
@@ -46,30 +70,23 @@ class EmailService:
         due_date: str,
         amount: str = "40.00",
     ) -> dict:
-        try:
-            html_content = self._render_template(
-                "charge_email.html",
-                name=name,
-                qr_code_base64=qr_code_base64,
-                pix_code=pix_code,
-                due_date=due_date,
-                amount=amount,
-            )
+        html_content = self._render_template(
+            "charge_email.html",
+            name=name,
+            qr_code_base64=qr_code_base64,
+            pix_code=pix_code,
+            due_date=due_date,
+            amount=amount,
+        )
 
-            params: resend.Emails.SendParams = {
-                "from": self.from_email,
-                "to": [to],
-                "subject": f"[Caixinha Trilha] Cobrança de R$ {amount}",
-                "html": html_content,
-            }
+        self._send_email(
+            to=to,
+            subject=f"[Caixinha Trilha] Cobrança de R$ {amount}",
+            html_content=html_content,
+        )
 
-            response = resend.Emails.send(params)
-            logger.info(f"Charge email sent to {to}: id={response.get('id')}")
-            return response
-
-        except Exception as e:
-            logger.error(f"Failed to send charge email to {to}: {e}")
-            raise
+        logger.info(f"Charge email sent to {to}")
+        return {"status": "sent", "to": to}
 
     def send_reminder_email(
         self,
@@ -79,29 +96,22 @@ class EmailService:
         pix_code: str,
         amount: str = "40.00",
     ) -> dict:
-        try:
-            html_content = self._render_template(
-                "reminder_email.html",
-                name=name,
-                qr_code_base64=qr_code_base64,
-                pix_code=pix_code,
-                amount=amount,
-            )
+        html_content = self._render_template(
+            "reminder_email.html",
+            name=name,
+            qr_code_base64=qr_code_base64,
+            pix_code=pix_code,
+            amount=amount,
+        )
 
-            params: resend.Emails.SendParams = {
-                "from": self.from_email,
-                "to": [to],
-                "subject": f"[Caixinha Trilha] Lembrete de pagamento pendente - R$ {amount}",
-                "html": html_content,
-            }
+        self._send_email(
+            to=to,
+            subject=f"[Caixinha Trilha] Lembrete de pagamento pendente - R$ {amount}",
+            html_content=html_content,
+        )
 
-            response = resend.Emails.send(params)
-            logger.info(f"Reminder email sent to {to}: id={response.get('id')}")
-            return response
-
-        except Exception as e:
-            logger.error(f"Failed to send reminder email to {to}: {e}")
-            raise
+        logger.info(f"Reminder email sent to {to}")
+        return {"status": "sent", "to": to}
 
     def send_confirmation_email(
         self,
@@ -110,26 +120,19 @@ class EmailService:
         amount: str = "40.00",
         month: str = "",
     ) -> dict:
-        try:
-            month_text = f" de {month}" if month else ""
-            html_content = self._render_template(
-                "confirmation_email.html",
-                name=name,
-                amount=amount,
-                month_text=month_text,
-            )
+        month_text = f" de {month}" if month else ""
+        html_content = self._render_template(
+            "confirmation_email.html",
+            name=name,
+            amount=amount,
+            month_text=month_text,
+        )
 
-            params: resend.Emails.SendParams = {
-                "from": self.from_email,
-                "to": [to],
-                "subject": f"[Caixinha Trilha] Pagamento confirmado - R$ {amount}",
-                "html": html_content,
-            }
+        self._send_email(
+            to=to,
+            subject=f"[Caixinha Trilha] Pagamento confirmado - R$ {amount}",
+            html_content=html_content,
+        )
 
-            response = resend.Emails.send(params)
-            logger.info(f"Confirmation email sent to {to}: id={response.get('id')}")
-            return response
-
-        except Exception as e:
-            logger.error(f"Failed to send confirmation email to {to}: {e}")
-            raise
+        logger.info(f"Confirmation email sent to {to}")
+        return {"status": "sent", "to": to}
