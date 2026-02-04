@@ -35,15 +35,20 @@ jobs:
         run: |
           echo "${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}" | base64 -d > credentials.json
 
+      - name: Setup Efí certificate
+        run: |
+          echo "${{ secrets.EFI_CERTIFICATE_BASE64 }}" | base64 -d > certificado.pem
+
       - name: Run charge generation job
         env:
           EFI_CLIENT_ID: ${{ secrets.EFI_CLIENT_ID }}
           EFI_CLIENT_SECRET: ${{ secrets.EFI_CLIENT_SECRET }}
-          EFI_CERTIFICATE_BASE64: ${{ secrets.EFI_CERTIFICATE_BASE64 }}
+          EFI_CERTIFICATE_PATH: certificado.pem
           EFI_PIX_KEY: ${{ secrets.EFI_PIX_KEY }}
           GOOGLE_CREDENTIALS_PATH: credentials.json
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
             python -m src.jobs.generate_charges --force
@@ -53,4 +58,4 @@ jobs:
 
       - name: Cleanup credentials
         if: always()
-        run: rm -f credentials.json
+        run: rm -f credentials.json certificado.pem
