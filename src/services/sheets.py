@@ -85,7 +85,7 @@ class SheetsService:
                 raise
         return self._spreadsheet
 
-    def get_members(self, sheet_name: str = "Sheet1") -> list[Member]:
+    def get_members(self, sheet_name: str = "2026") -> list[Member]:
         try:
             spreadsheet = self._get_spreadsheet()
             worksheet = spreadsheet.worksheet(sheet_name)
@@ -93,13 +93,13 @@ class SheetsService:
 
             members = []
             for record in records:
-                name = record.get("Nome", record.get("Name", ""))
+                name = record.get("Pessoas", record.get("Nome", record.get("Name", "")))
                 email = record.get("Email", "")
 
                 payment_status = {
                     key: value
                     for key, value in record.items()
-                    if key not in ["Nome", "Name", "Email"]
+                    if key not in ["Pessoas", "Nome", "Name", "Email"]
                 }
 
                 if name:
@@ -118,7 +118,7 @@ class SheetsService:
             raise
 
     def get_unpaid_members(
-        self, month: str, sheet_name: str = "Sheet1"
+        self, month: str, sheet_name: str = "2026"
     ) -> list[Member]:
         try:
             members = self.get_members(sheet_name)
@@ -140,7 +140,7 @@ class SheetsService:
             raise
 
     def mark_as_paid(
-        self, name: str, month: str, sheet_name: str = "Sheet1"
+        self, name: str, month: str, sheet_name: str = "2026"
     ) -> bool:
         try:
             spreadsheet = self._get_spreadsheet()
@@ -151,7 +151,7 @@ class SheetsService:
             month_col = None
 
             for idx, header in enumerate(headers, start=1):
-                if header in ["Nome", "Name"]:
+                if header in ["Pessoas", "Nome", "Name"]:
                     name_col = idx
                 if header == month:
                     month_col = idx

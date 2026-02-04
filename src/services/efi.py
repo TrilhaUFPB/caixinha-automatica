@@ -45,9 +45,14 @@ class EfiService:
         if self._cert_path and os.path.exists(self._cert_path):
             return self._cert_path
 
+        local_pem = os.getenv("EFI_CERTIFICATE_PATH", "certificado.pem")
+        if os.path.exists(local_pem):
+            self._cert_path = local_pem
+            return self._cert_path
+
         cert_bytes = base64.b64decode(self.certificate_base64)
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".p12") as f:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as f:
             f.write(cert_bytes)
             self._cert_path = f.name
 
