@@ -1,3 +1,7 @@
+"""
+Test script to generate a PIX charge and send email.
+Uses the "teste" sheet with only test members.
+"""
 import logging
 import sys
 
@@ -14,11 +18,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TEST_AMOUNT = "0.01"  # R$0.01 para teste
+TEST_SHEET = "teste"
+TEST_AMOUNT = "0.01"
 
 
 def run_test_charge() -> dict:
-    logger.info("=== RUNNING TEST CHARGE (R$0.01) ===")
+    logger.info("=== TEST: CHARGE GENERATION (R$0.01) ===")
+    logger.info(f"Using sheet: {TEST_SHEET}")
     
     month_column = get_current_month_column()
     logger.info(f"Current month: {month_column}")
@@ -27,18 +33,16 @@ def run_test_charge() -> dict:
     efi_service = EfiService()
     email_service = EmailService()
     
-    # Usar aba "teste" em vez da aba de produção
     try:
-        unpaid_members = sheets_service.get_unpaid_members(month_column, sheet_name="teste")
+        unpaid_members = sheets_service.get_unpaid_members(month_column, sheet_name=TEST_SHEET)
     except Exception as e:
-        logger.error(f"Failed to get members from 'teste' sheet: {e}")
+        logger.error(f"Failed to get members from '{TEST_SHEET}' sheet: {e}")
         return {"status": "error", "error": str(e)}
     
     if not unpaid_members:
-        logger.info("No unpaid members in 'teste' sheet")
+        logger.info(f"No unpaid members in '{TEST_SHEET}' sheet for {month_column}")
         return {"status": "success", "message": "No unpaid members", "charges": 0}
     
-    # Processar apenas o primeiro membro para teste
     member = unpaid_members[0]
     logger.info(f"Testing with: {member.name} ({member.email})")
     
@@ -49,7 +53,7 @@ def run_test_charge() -> dict:
             descricao=f"TESTE Caixinha - {month_column}",
         )
         
-        logger.info(f"Created PIX charge: txid={charge.txid}")
+        logger.info(f"PIX charge created: txid={charge.txid}")
         logger.info(f"PIX code: {charge.copy_paste_code[:50]}...")
         
         if member.email:
