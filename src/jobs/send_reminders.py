@@ -7,7 +7,7 @@ sys.path.insert(0, str(__file__).rsplit("/src", 1)[0])
 from src.services.efi import EfiService
 from src.services.email import EmailService
 from src.services.sheets import SheetsService
-from src.utils.business_days import get_current_month_column
+from src.utils.business_days import get_current_month_column, get_nth_business_day
 
 logging.basicConfig(
     level=logging.INFO,
@@ -21,6 +21,15 @@ CHARGE_AMOUNT = "40.00"
 def run_send_reminders() -> dict:
     today = date.today()
     logger.info(f"Starting reminder job for {today}")
+
+    # Check if we're past the 5th business day (when charges are sent)
+    fifth_business_day = get_nth_business_day(today.year, today.month, n=5)
+    if today <= fifth_business_day:
+        logger.info(
+            f"Today ({today}) is before or on the 5th business day ({fifth_business_day}). "
+            "Skipping reminders - charges haven't been sent yet."
+        )
+        return {"status": "skipped", "reason": "before_charges", "reminders": 0}
 
     month_column = get_current_month_column()
     logger.info(f"Looking for unpaid members in column: {month_column}")
