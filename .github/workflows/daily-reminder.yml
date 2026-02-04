@@ -2,8 +2,9 @@ name: Daily Reminder
 
 on:
   schedule:
-    # Runs at 13:00 UTC (10:00 AM BRT) every day
-    - cron: '0 13 * * *'
+    # Runs at 13:00 UTC (10:00 AM BRT) from day 8 onwards
+    # (after charges are sent on the 5th business day, usually around day 7)
+    - cron: '0 13 8-31 * *'
   workflow_dispatch:
 
 jobs:
