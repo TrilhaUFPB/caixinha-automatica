@@ -66,4 +66,4 @@ def get_month_name_pt(month: int) -> str:
 def get_current_month_column() -> str:
     today = date.today()
     month_name = get_month_name_pt(today.month)
-    return f"{month_name}/{today.year}"
+    return month_name
