@@ -32,6 +32,53 @@ def run_process_payments(days_back: int = 1) -> dict:
     end_iso = today.isoformat() + "T23:59:59Z"
     
     try:
+        members = sheets_service.get_members()
+    except Exception as e:
+        logger.error(f"Failed to get members: {e}")
+        return {"status": "error", "error": str(e), "processed": 0}
+    
+    members_by_name = {m.name.lower().strip(): m for m in members}
+    members_by_first_name = {}
+    for m in members:
+        first_name = m.name.lower().strip().split()[0]
+        if first_name not in members_by_first_name:
+            members_by_first_name[first_name] = m
+    
+    first_of_month = today.replace(day=1)
+    charges_start = first_of_month.isoformat() + "T00:00:00Z"
+    charges_end = today.isoformat() + "T23:59:59Z"
+    
+    txid_to_member = {}
+    try:
+        charges = efi_service.list_charges(charges_start, charges_end)
+        for charge in charges:
+            charge_txid = charge.get("txid", "")
+            nome = ""
+            
+            devedor = charge.get("devedor", {})
+            if devedor:
+                nome = devedor.get("nome", "").lower().strip()
+            
+            if not nome:
+                solicitacao = charge.get("solicitacaoPagador", "")
+                parts = solicitacao.split(" - ")
+                if len(parts) >= 3:
+                    nome = parts[-1].lower().strip()
+            
+            if nome and charge_txid:
+                member = members_by_name.get(nome)
+                if not member:
+                    first = nome.split()[0]
+                    member = members_by_first_name.get(first)
+                if member:
+                    txid_to_member[charge_txid] = member
+                    logger.info(f"Mapped txid={charge_txid} to member={member.name}")
+        
+        logger.info(f"Built txid-to-member map with {len(txid_to_member)} entries from {len(charges)} charges")
+    except Exception as e:
+        logger.warning(f"Failed to list charges for mapping: {e}")
+    
+    try:
         pix_list = efi_service.list_received_pix(start_iso, end_iso)
     except Exception as e:
         logger.error(f"Failed to list received PIX: {e}")
@@ -43,14 +90,6 @@ def run_process_payments(days_back: int = 1) -> dict:
     
     logger.info(f"Found {len(pix_list)} PIX payments to process")
     
-    try:
-        members = sheets_service.get_members()
-    except Exception as e:
-        logger.error(f"Failed to get members: {e}")
-        return {"status": "error", "error": str(e), "processed": 0}
-    
-    members_by_name = {m.name.lower().strip(): m for m in members}
-    
     processed = 0
     already_paid = 0
     not_found = 0
@@ -59,28 +98,29 @@ def run_process_payments(days_back: int = 1) -> dict:
     for pix in pix_list:
         txid = pix.get("txid", "")
         valor = pix.get("valor", "")
-        pagador = pix.get("pagador", {})
-        nome_pagador = pagador.get("nome", "").lower().strip()
         
-        logger.info(f"Processing PIX: txid={txid}, valor={valor}, pagador={nome_pagador}")
-        
-        member = members_by_name.get(nome_pagador)
-        
-        if not member:
-            for name, m in members_by_name.items():
-                if nome_pagador in name or name in nome_pagador:
-                    member = m
-                    break
-        
-        if not member:
-            logger.warning(f"Member not found for pagador: {nome_pagador}")
-            not_found += 1
-            results.append({
-                "txid": txid,
-                "pagador": nome_pagador,
-                "status": "not_found",
-            })
+        if valor != "40.00":
+            logger.info(f"Skipping PIX with valor={valor} (expected 40.00), txid={txid}")
             continue
+        
+        member = txid_to_member.get(txid)
+        
+        if not member:
+            pagador = pix.get("pagador", {})
+            nome_pagador = pagador.get("nome", "").lower().strip()
+            if nome_pagador:
+                member = members_by_name.get(nome_pagador)
+                if not member:
+                    first = nome_pagador.split()[0]
+                    member = members_by_first_name.get(first)
+        
+        if not member:
+            logger.warning(f"Could not identify member for txid={txid}")
+            not_found += 1
+            results.append({"txid": txid, "status": "not_found"})
+            continue
+        
+        logger.info(f"Processing PIX: txid={txid}, valor={valor}, member={member.name}")
         
         current_status = member.payment_status.get(month_column, "").lower()
         if current_status in ["paid", "pago"]:

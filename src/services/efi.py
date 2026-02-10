@@ -134,6 +134,28 @@ class EfiService:
             logger.error(f"Failed to get charge status for txid={txid}: {e}")
             raise
 
+    def get_pix_detail(self, e2e_id: str) -> dict:
+        try:
+            efi = self._get_client()
+            response = efi.pix_detail_received(params={"e2eId": e2e_id})
+            logger.info(f"Retrieved PIX detail for e2eId={e2e_id}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to get PIX detail for e2eId={e2e_id}: {e}")
+            raise
+
+    def list_charges(self, start_date: str, end_date: str) -> list:
+        try:
+            efi = self._get_client()
+            params = {"inicio": start_date, "fim": end_date}
+            response = efi.pix_list_charges(params=params)
+            charges = response.get("cobs", [])
+            logger.info(f"Retrieved {len(charges)} charges from {start_date} to {end_date}")
+            return charges
+        except Exception as e:
+            logger.error(f"Failed to list charges: {e}")
+            raise
+
     def list_received_pix(self, start_date: str, end_date: str) -> list:
         try:
             efi = self._get_client()

@@ -28,7 +28,7 @@ def calculate_due_date() -> str:
     return due_date.strftime("%d/%m/%Y")
 
 
-def run_charge_generation(force: bool = False) -> dict:
+def run_charge_generation(force: bool = False, send_email: bool = True) -> dict:
     today = date.today()
     
     if not force and not is_nth_business_day(today, n=5):
@@ -68,23 +68,26 @@ def run_charge_generation(force: bool = False) -> dict:
             charge = efi_service.create_pix_charge(
                 valor=CHARGE_AMOUNT,
                 nome_devedor=member.name,
-                descricao=f"Caixinha Trilha - {month_column}",
+                descricao=f"Caixinha Trilha - {month_column} - {member.name}",
             )
             
             logger.info(f"Created charge for {member.name}: txid={charge.txid}")
             
-            if member.email:
-                email_service.send_charge_email(
-                    to=member.email,
-                    name=member.name,
-                    qr_code_base64=charge.qr_code_base64,
-                    pix_code=charge.copy_paste_code,
-                    due_date=due_date,
-                    amount=CHARGE_AMOUNT,
-                )
-                logger.info(f"Email sent to {member.email}")
+            if send_email:
+                if member.email:
+                    email_service.send_charge_email(
+                        to=member.email,
+                        name=member.name,
+                        qr_code_base64=charge.qr_code_base64,
+                        pix_code=charge.copy_paste_code,
+                        due_date=due_date,
+                        amount=CHARGE_AMOUNT,
+                    )
+                    logger.info(f"Email sent to {member.email}")
+                else:
+                    logger.warning(f"No email for member {member.name}, skipping email")
             else:
-                logger.warning(f"No email for member {member.name}, skipping email")
+                logger.info(f"Email skipped for {member.name} (--no-email)")
             
             successful_charges += 1
             results.append({
@@ -126,9 +129,14 @@ def main():
         action="store_true",
         help="Force execution even if not the 5th business day",
     )
+    parser.add_argument(
+        "--no-email",
+        action="store_true",
+        help="Skip sending emails",
+    )
     args = parser.parse_args()
     
-    result = run_charge_generation(force=args.force)
+    result = run_charge_generation(force=args.force, send_email=not args.no_email)
     
     if result["status"] == "error":
         logger.error(f"Job failed: {result.get('error')}")
