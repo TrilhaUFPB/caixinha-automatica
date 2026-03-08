@@ -5,9 +5,7 @@ from datetime import date, timedelta
 sys.path.insert(0, str(__file__).rsplit("/src", 1)[0])
 
 from src.services.efi import EfiService
-from src.services.email import EmailService
-from src.services.sheets import SheetsService
-from src.utils.business_days import get_current_month_column
+from src.services.payment_processor import process_pix_events
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,188 +14,54 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def run_process_payments(days_back: int = 1) -> dict:
+def run_process_payments(days_back: int = 3) -> dict:
+    """Reconciliation job: polls Efí for received PIX and processes them.
+
+    This is a fallback for the webhook. Runs daily to catch any missed payments.
+    """
     today = date.today()
     start_date = today - timedelta(days=days_back)
-    
-    logger.info(f"Checking for payments from {start_date} to {today}")
-    
+
+    logger.info(f"Reconciliation: checking payments from {start_date} to {today}")
+
     efi_service = EfiService()
-    sheets_service = SheetsService()
-    email_service = EmailService()
-    
-    month_column = get_current_month_column()
-    
+
     start_iso = start_date.isoformat() + "T00:00:00Z"
     end_iso = today.isoformat() + "T23:59:59Z"
-    
-    try:
-        members = sheets_service.get_members()
-    except Exception as e:
-        logger.error(f"Failed to get members: {e}")
-        return {"status": "error", "error": str(e), "processed": 0}
-    
-    members_by_name = {m.name.lower().strip(): m for m in members}
-    members_by_first_name = {}
-    for m in members:
-        first_name = m.name.lower().strip().split()[0]
-        if first_name not in members_by_first_name:
-            members_by_first_name[first_name] = m
-    
-    first_of_month = today.replace(day=1)
-    charges_start = first_of_month.isoformat() + "T00:00:00Z"
-    charges_end = today.isoformat() + "T23:59:59Z"
-    
-    txid_to_member = {}
-    try:
-        charges = efi_service.list_charges(charges_start, charges_end)
-        for charge in charges:
-            charge_txid = charge.get("txid", "")
-            nome = ""
-            
-            devedor = charge.get("devedor", {})
-            if devedor:
-                nome = devedor.get("nome", "").lower().strip()
-            
-            if not nome:
-                solicitacao = charge.get("solicitacaoPagador", "")
-                parts = solicitacao.split(" - ")
-                if len(parts) >= 3:
-                    nome = parts[-1].lower().strip()
-            
-            if nome and charge_txid:
-                member = members_by_name.get(nome)
-                if not member:
-                    first = nome.split()[0]
-                    member = members_by_first_name.get(first)
-                if member:
-                    txid_to_member[charge_txid] = member
-                    logger.info(f"Mapped txid={charge_txid} to member={member.name}")
-        
-        logger.info(f"Built txid-to-member map with {len(txid_to_member)} entries from {len(charges)} charges")
-    except Exception as e:
-        logger.warning(f"Failed to list charges for mapping: {e}")
-    
+
     try:
         pix_list = efi_service.list_received_pix(start_iso, end_iso)
     except Exception as e:
         logger.error(f"Failed to list received PIX: {e}")
         return {"status": "error", "error": str(e), "processed": 0}
-    
+
     if not pix_list:
         logger.info("No PIX payments found in the period.")
         return {"status": "success", "processed": 0}
-    
-    logger.info(f"Found {len(pix_list)} PIX payments to process")
-    
-    processed = 0
-    already_paid = 0
-    not_found = 0
-    results = []
-    
-    for pix in pix_list:
-        txid = pix.get("txid", "")
-        valor = pix.get("valor", "")
-        
-        if valor != "40.00":
-            logger.info(f"Skipping PIX with valor={valor} (expected 40.00), txid={txid}")
-            continue
-        
-        member = txid_to_member.get(txid)
-        
-        if not member:
-            pagador = pix.get("pagador", {})
-            nome_pagador = pagador.get("nome", "").lower().strip()
-            if nome_pagador:
-                member = members_by_name.get(nome_pagador)
-                if not member:
-                    first = nome_pagador.split()[0]
-                    member = members_by_first_name.get(first)
-        
-        if not member:
-            logger.warning(f"Could not identify member for txid={txid}")
-            not_found += 1
-            results.append({"txid": txid, "status": "not_found"})
-            continue
-        
-        logger.info(f"Processing PIX: txid={txid}, valor={valor}, member={member.name}")
-        
-        current_status = member.payment_status.get(month_column, "").lower()
-        if current_status in ["paid", "pago"]:
-            logger.info(f"Member {member.name} already marked as paid for {month_column}")
-            already_paid += 1
-            results.append({
-                "txid": txid,
-                "name": member.name,
-                "status": "already_paid",
-            })
-            continue
-        
-        try:
-            sheets_service.mark_as_paid(member.name, month_column)
-            logger.info(f"Marked {member.name} as paid for {month_column}")
-            
-            if member.email:
-                try:
-                    email_service.send_confirmation_email(
-                        to=member.email,
-                        name=member.name,
-                        amount=valor,
-                        month=month_column,
-                    )
-                    logger.info(f"Confirmation email sent to {member.email}")
-                except Exception as e:
-                    logger.error(f"Failed to send confirmation email to {member.email}: {e}")
-            
-            processed += 1
-            results.append({
-                "txid": txid,
-                "name": member.name,
-                "email": member.email,
-                "status": "success",
-            })
-            
-        except Exception as e:
-            logger.error(f"Failed to mark {member.name} as paid: {e}")
-            results.append({
-                "txid": txid,
-                "name": member.name,
-                "status": "error",
-                "error": str(e),
-            })
-    
-    logger.info(
-        f"Payment processing complete. "
-        f"Processed: {processed}, Already paid: {already_paid}, Not found: {not_found}"
-    )
-    
-    return {
-        "status": "success",
-        "processed": processed,
-        "already_paid": already_paid,
-        "not_found": not_found,
-        "results": results,
-    }
+
+    logger.info(f"Found {len(pix_list)} PIX payments to reconcile")
+
+    return process_pix_events(pix_list, efi_service=efi_service)
 
 
 def main():
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Process received PIX payments")
+
+    parser = argparse.ArgumentParser(description="Reconcile received PIX payments")
     parser.add_argument(
         "--days",
         type=int,
-        default=1,
-        help="Number of days to look back for payments (default: 1)",
+        default=3,
+        help="Number of days to look back for payments (default: 3)",
     )
     args = parser.parse_args()
-    
+
     result = run_process_payments(days_back=args.days)
-    
+
     if result["status"] == "error":
         logger.error(f"Job failed: {result.get('error')}")
         sys.exit(1)
-    
+
     logger.info(f"Job completed: {result}")
 
 

@@ -3,7 +3,7 @@ name = "caixinha-trilha"
 version = "0.1.0"
 description = "Caixinha automática - Trilha"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
     "efipay>=1.0.7",
     "google-auth>=2.48.0",

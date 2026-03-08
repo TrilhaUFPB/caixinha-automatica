@@ -2,14 +2,14 @@ name: Process Payments
 
 on:
   schedule:
-    # Runs every 2 hours from 8am to 10pm BRT (11:00 to 01:00 UTC next day)
-    - cron: '0 11,13,15,17,19,21,23,1 * * *'
+    # Daily reconciliation at 8am BRT (11:00 UTC) - fallback for webhook
+    - cron: '0 11 * * *'
   workflow_dispatch:
     inputs:
       days_back:
         description: 'Number of days to look back for payments'
         required: false
-        default: '1'
+        default: '3'
         type: string
 
 jobs:
@@ -51,7 +51,7 @@ jobs:
         run: |
           DAYS="${{ github.event.inputs.days_back }}"
           if [ -z "$DAYS" ]; then
-            DAYS="1"
+            DAYS="3"
           fi
           python -m src.jobs.process_payments --days "$DAYS"
 
