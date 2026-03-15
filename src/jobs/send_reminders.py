@@ -16,6 +16,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CHARGE_AMOUNT = "40.00"
+TECPRED_CHARGE_AMOUNT = "25.00"
+TECPRED_MEMBERS = {"malu quintela", "malu uchoa", "nicole", "joaquim"}
+
+
+def get_charge_amount(member_name: str) -> str:
+    return TECPRED_CHARGE_AMOUNT if member_name.strip().lower() in TECPRED_MEMBERS else CHARGE_AMOUNT
 
 
 def run_send_reminders() -> dict:
@@ -65,10 +71,11 @@ def run_send_reminders() -> dict:
             continue
 
         try:
-            logger.info(f"Processing member: {member.name} ({member.email})")
+            amount = get_charge_amount(member.name)
+            logger.info(f"Processing member: {member.name} ({member.email}), amount: R${amount}")
 
             charge = efi_service.create_pix_charge(
-                valor=CHARGE_AMOUNT,
+                valor=amount,
                 nome_devedor=member.name,
                 descricao=f"Caixinha Trilha - {month_column}",
             )
@@ -80,7 +87,7 @@ def run_send_reminders() -> dict:
                 name=member.name,
                 qr_code_base64=charge.qr_code_base64,
                 pix_code=charge.copy_paste_code,
-                amount=CHARGE_AMOUNT,
+                amount=amount,
             )
 
             logger.info(f"Reminder email sent to {member.email}")

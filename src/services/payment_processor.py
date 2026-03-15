@@ -10,6 +10,8 @@ from src.utils.business_days import get_current_month_column
 logger = logging.getLogger(__name__)
 
 EXPECTED_VALOR = "40.00"
+TECPRED_VALOR = "25.00"
+TECPRED_MEMBERS = {"malu quintela", "malu uchoa", "nicole", "joaquim"}
 
 
 def _extract_month_from_description(description: str) -> Optional[str]:
@@ -66,8 +68,8 @@ def process_pix_events(
         txid = pix.get("txid", "")
         valor = pix.get("valor", "")
 
-        if valor != EXPECTED_VALOR:
-            logger.info(f"Skipping PIX with valor={valor} (expected {EXPECTED_VALOR}), txid={txid}")
+        if valor not in (EXPECTED_VALOR, TECPRED_VALOR):
+            logger.info(f"Skipping PIX with valor={valor} (expected {EXPECTED_VALOR} or {TECPRED_VALOR}), txid={txid}")
             continue
 
         member = None

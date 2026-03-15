@@ -20,7 +20,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CHARGE_AMOUNT = "40.00"
+TECPRED_CHARGE_AMOUNT = "25.00"
+TECPRED_MEMBERS = {"malu quintela", "malu uchoa", "nicole", "joaquim"}
 CHARGE_EXPIRATION_DAYS = 7
+
+
+def get_charge_amount(member_name: str) -> str:
+    return TECPRED_CHARGE_AMOUNT if member_name.strip().lower() in TECPRED_MEMBERS else CHARGE_AMOUNT
 
 
 def calculate_due_date() -> str:
@@ -28,7 +34,7 @@ def calculate_due_date() -> str:
     return due_date.strftime("%d/%m/%Y")
 
 
-def run_charge_generation(force: bool = False, send_email: bool = True) -> dict:
+def run_charge_generation(force: bool = False, send_email: bool = True, member_filter: str = None) -> dict:
     today = date.today()
     
     if not force and not is_nth_business_day(today, n=5):
@@ -50,6 +56,9 @@ def run_charge_generation(force: bool = False, send_email: bool = True) -> dict:
         logger.error(f"Failed to get unpaid members: {e}")
         return {"status": "error", "error": str(e), "charges": 0}
     
+    if member_filter:
+        unpaid_members = [m for m in unpaid_members if m.name.strip().lower() == member_filter.lower()]
+
     if not unpaid_members:
         logger.info("No unpaid members found.")
         return {"status": "success", "charges": 0}
@@ -63,10 +72,11 @@ def run_charge_generation(force: bool = False, send_email: bool = True) -> dict:
     
     for member in unpaid_members:
         try:
-            logger.info(f"Processing member: {member.name} ({member.email})")
+            amount = get_charge_amount(member.name)
+            logger.info(f"Processing member: {member.name} ({member.email}), amount: R${amount}")
             
             charge = efi_service.create_pix_charge(
-                valor=CHARGE_AMOUNT,
+                valor=amount,
                 nome_devedor=member.name,
                 descricao=f"Caixinha Trilha - {month_column} - {member.name}",
             )
@@ -83,7 +93,7 @@ def run_charge_generation(force: bool = False, send_email: bool = True) -> dict:
                         qr_code_base64=charge.qr_code_base64,
                         pix_code=charge.copy_paste_code,
                         due_date=due_date,
-                        amount=CHARGE_AMOUNT,
+                        amount=amount,
                     )
                     logger.info(f"Email sent to {member.email}")
                 else:
@@ -136,9 +146,14 @@ def main():
         action="store_true",
         help="Skip sending emails",
     )
+    parser.add_argument(
+        "--member",
+        type=str,
+        help="Generate charge only for a specific member (by name)",
+    )
     args = parser.parse_args()
     
-    result = run_charge_generation(force=args.force, send_email=not args.no_email)
+    result = run_charge_generation(force=args.force, send_email=not args.no_email, member_filter=args.member)
     
     if result["status"] == "error":
         logger.error(f"Job failed: {result.get('error')}")
