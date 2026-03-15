@@ -139,6 +139,43 @@ class SheetsService:
             logger.error(f"Failed to get unpaid members for {month}: {e}")
             raise
 
+    def save_txid_mapping(self, txid: str, member_name: str, month: str) -> None:
+        """Save a txid → member mapping in the 'txids' sheet for payment reconciliation."""
+        try:
+            spreadsheet = self._get_spreadsheet()
+            try:
+                worksheet = spreadsheet.worksheet("txids")
+            except gspread.WorksheetNotFound:
+                worksheet = spreadsheet.add_worksheet(title="txids", rows=1000, cols=4)
+                worksheet.append_row(["txid", "member", "month", "created_at"])
+                logger.info("Created 'txids' worksheet")
+
+            from datetime import datetime
+
+            worksheet.append_row([txid, member_name, month, datetime.now().isoformat()])
+            logger.info(f"Saved txid mapping: {txid} → {member_name} ({month})")
+        except Exception as e:
+            logger.error(f"Failed to save txid mapping: {e}")
+
+    def get_txid_mappings(self) -> dict:
+        """Get all txid → (member, month) mappings from the 'txids' sheet."""
+        try:
+            spreadsheet = self._get_spreadsheet()
+            try:
+                worksheet = spreadsheet.worksheet("txids")
+            except gspread.WorksheetNotFound:
+                return {}
+
+            records = worksheet.get_all_records()
+            return {
+                r["txid"]: {"member": r["member"], "month": r["month"]}
+                for r in records
+                if r.get("txid")
+            }
+        except Exception as e:
+            logger.error(f"Failed to get txid mappings: {e}")
+            return {}
+
     def mark_as_paid(
         self, name: str, month: str, sheet_name: str = "2026"
     ) -> bool:

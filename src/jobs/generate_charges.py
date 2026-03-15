@@ -73,6 +73,8 @@ def run_charge_generation(force: bool = False, send_email: bool = True) -> dict:
             
             logger.info(f"Created charge for {member.name}: txid={charge.txid}")
             
+            sheets_service.save_txid_mapping(charge.txid, member.name, month_column)
+            
             if send_email:
                 if member.email:
                     email_service.send_charge_email(

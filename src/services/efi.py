@@ -156,6 +156,39 @@ class EfiService:
             logger.error(f"Failed to list charges: {e}")
             raise
 
+    def register_webhook(self, webhook_url: str, skip_mtls: bool = True) -> dict:
+        """Register a webhook URL with Efí for PIX notifications.
+
+        The Efí API appends '/pix' to the webhook URL automatically.
+        Use 'ignorar=' query param to absorb it if your endpoint doesn't expect it.
+        """
+        try:
+            efi = self._get_client()
+            params = {"chave": self.pix_key}
+            body = {"webhookUrl": webhook_url}
+            headers = {}
+            if skip_mtls:
+                headers["x-skip-mtls-checking"] = "true"
+
+            response = efi.pix_config_webhook(params=params, body=body, headers=headers)
+            logger.info(f"Webhook registered: {webhook_url}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to register webhook: {e}")
+            raise
+
+    def get_webhook_info(self) -> dict:
+        """Get current webhook configuration for the PIX key."""
+        try:
+            efi = self._get_client()
+            params = {"chave": self.pix_key}
+            response = efi.pix_detail_webhook(params=params)
+            logger.info(f"Webhook info: {response}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to get webhook info: {e}")
+            raise
+
     def list_received_pix(self, start_date: str, end_date: str) -> list:
         try:
             efi = self._get_client()

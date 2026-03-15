@@ -53,6 +53,9 @@ def process_pix_events(
         if first_name not in members_by_first_name:
             members_by_first_name[first_name] = m
 
+    # Load txid → member mappings from the spreadsheet
+    txid_mappings = sheets_service.get_txid_mappings()
+
     processed = 0
     already_paid = 0
     not_found = 0
@@ -70,8 +73,21 @@ def process_pix_events(
         member = None
         month = get_current_month_column()
 
+        # Try txid → member mapping from spreadsheet first
+        if txid and txid in txid_mappings:
+            mapping = txid_mappings[txid]
+            mapped_name = mapping["member"].lower().strip()
+            member = members_by_name.get(mapped_name)
+            if not member:
+                first = mapped_name.split()[0]
+                member = members_by_first_name.get(first)
+            if member and mapping.get("month"):
+                month = mapping["month"]
+            if member:
+                logger.info(f"Matched txid={txid} to {member.name} via txid mapping")
+
         # Try to resolve member and month from charge metadata via txid
-        if txid:
+        if not member and txid:
             try:
                 charge = efi_service.get_charge_status(txid)
                 description = charge.get("solicitacaoPagador", "")
