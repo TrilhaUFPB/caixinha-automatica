@@ -7,7 +7,7 @@ sys.path.insert(0, str(__file__).rsplit("/src", 1)[0])
 from src.services.efi import EfiService
 from src.services.email import EmailService
 from src.services.sheets import SheetsService
-from src.utils.business_days import get_current_month_column, get_nth_business_day
+from src.utils.business_days import get_current_month_column, get_nth_business_day, is_business_day
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +27,11 @@ def get_charge_amount(member_name: str) -> str:
 def run_send_reminders() -> dict:
     today = date.today()
     logger.info(f"Starting reminder job for {today}")
+
+    # Skip weekends and holidays
+    if not is_business_day(today):
+        logger.info(f"Today ({today}) is not a business day (weekend or holiday). Skipping reminders.")
+        return {"status": "skipped", "reason": "not_business_day", "reminders": 0}
 
     # Check if we're past the 5th business day (when charges are sent)
     fifth_business_day = get_nth_business_day(today.year, today.month, n=5)
