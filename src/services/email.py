@@ -85,7 +85,6 @@ class EmailService:
         pix_key_type: str,
         beneficiary_name: str,
         form_url: str,
-        due_date: str,
         amount: str = "40.00",
         pending_months: list[str] | None = None,
     ) -> dict:
@@ -96,7 +95,6 @@ class EmailService:
             pix_key_type=pix_key_type,
             beneficiary_name=beneficiary_name,
             form_url=form_url,
-            due_date=due_date,
             amount=amount,
             pending_months_section=self._build_pending_months_html(pending_months or []),
         )

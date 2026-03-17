@@ -70,9 +70,10 @@ def get_current_month_column() -> str:
 
 
 def get_months_up_to_current() -> list[str]:
-    """Return ordered list of month names from Janeiro up to (and including) the current month."""
+    """Return ordered list of month names from the charge start month up to (and including) the current month."""
     today = date.today()
-    return [get_month_name_pt(m) for m in range(1, today.month + 1)]
+    start = 2
+    return [get_month_name_pt(m) for m in range(start, today.month + 1)]
 
 
 def get_unpaid_months(payment_status: dict[str, str], current_month: str) -> list[str]:

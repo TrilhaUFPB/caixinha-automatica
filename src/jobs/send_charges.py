@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date
 
 sys.path.insert(0, str(__file__).rsplit("/src", 1)[0])
 
@@ -23,16 +23,8 @@ CHARGE_AMOUNT = os.getenv("DEFAULT_CHARGE_AMOUNT", "40.00")
 TECPRED_CHARGE_AMOUNT = os.getenv("TECPRED_CHARGE_AMOUNT", "25.00")
 TECPRED_MEMBERS = {"malu quintela", "malu uchoa", "nicole", "joaquim"}
 
-CHARGE_EXPIRATION_DAYS = 25
-
-
 def get_charge_amount(member_name: str) -> str:
     return TECPRED_CHARGE_AMOUNT if member_name.strip().lower() in TECPRED_MEMBERS else CHARGE_AMOUNT
-
-
-def calculate_due_date() -> str:
-    due_date = date.today() + timedelta(days=CHARGE_EXPIRATION_DAYS)
-    return due_date.strftime("%d/%m/%Y")
 
 
 def run_send_charges(force: bool = False, send_email: bool = True, member_filter: str = None) -> dict:
@@ -70,7 +62,6 @@ def run_send_charges(force: bool = False, send_email: bool = True, member_filter
 
     logger.info(f"Found {len(unpaid_members)} unpaid members")
 
-    due_date = calculate_due_date()
     successful_charges = 0
     failed_charges = 0
     results = []
@@ -91,7 +82,6 @@ def run_send_charges(force: bool = False, send_email: bool = True, member_filter
                         pix_key_type=pix_key_type,
                         beneficiary_name=beneficiary_name,
                         form_url=form_url,
-                        due_date=due_date,
                         amount=amount,
                         pending_months=pending,
                     )
