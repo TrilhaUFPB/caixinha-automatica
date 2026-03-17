@@ -37,22 +37,34 @@
                                 </tr>
                             </table>
 
-                            <!-- QR Code -->
+                            <!-- PIX Key -->
                             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
                                 <tr>
                                     <td align="center">
-                                        <img src="{{qr_code_base64}}" alt="QR Code PIX" style="max-width: 250px; border-radius: 8px;">
+                                        <div style="background-color: #f0f4ff; border: 1px solid #d0d8f0; border-radius: 8px; padding: 20px; text-align: center;">
+                                            <p style="margin: 0 0 5px 0; font-size: 13px; color: #666;">Chave PIX:</p>
+                                            <p style="margin: 0; font-size: 18px; font-weight: bold; color: #000928;">{{pix_key}}</p>
+                                        </div>
                                     </td>
                                 </tr>
                             </table>
 
-                            <!-- PIX Code -->
-                            <p style="font-size: 14px; color: #666; margin-bottom: 10px; text-align: center;">
-                                Ou copie o código PIX abaixo:
+                            {{pending_months_section}}
+
+                            <!-- Form Button -->
+                            <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="{{form_url}}" style="display: inline-block; background-color: #000928; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 16px; font-weight: bold;">
+                                            Enviar Comprovante
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="font-size: 13px; color: #888; text-align: center; margin-bottom: 20px;">
+                                Após realizar o PIX, clique no botão acima para enviar o comprovante.
                             </p>
-                            <div style="background-color: #f5f5f5; border-radius: 6px; padding: 15px; margin-bottom: 25px; word-break: break-all;">
-                                <code style="font-size: 12px; color: #333;">{{pix_code}}</code>
-                            </div>
 
                             <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;">
 

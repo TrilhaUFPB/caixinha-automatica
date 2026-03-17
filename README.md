@@ -1,60 +1,70 @@
-# Caixinha Automatica
+# Caixinha Automática
 
-Automated monthly fee collection system for Trilha UFPB. Generates PIX charges, sends email notifications, and reconciles payments via Google Sheets.
+Sistema automatizado de cobrança mensal para o Trilha UFPB. Envia cobranças PIX por email, processa comprovantes via Google Form, e registra pagamentos no Google Sheets.
 
-## Features
+## Como Funciona
 
-- **PIX Charge Generation**: Creates PIX charges via Efi (Gerencianet) API on the 5th business day of each month
-- **Email Notifications**: Sends QR codes and copy-paste PIX codes to members via Resend
-- **Payment Processing**: Reconciles received PIX payments with pending charges
-- **Payment Reminders**: Sends reminder emails for overdue payments
-- **Google Sheets Integration**: Tracks member payment status in a spreadsheet
+1. **Cobrança (5º dia útil):** Envia email com chave PIX e link do Google Form para membros inadimplentes
+2. **Comprovante:** Membro faz o PIX e envia comprovante pelo Google Form
+3. **Processamento (diário):** Job lê respostas do form, valida e marca como "Pago" na planilha
+4. **Lembrete (diário):** Após o 5º dia útil, envia lembretes para quem ainda não pagou
 
-## Architecture
+## Arquitetura
 
 ```
 src/
-  jobs/           # Scheduled tasks (generate_charges, process_payments, send_reminders)
-  services/       # External integrations (Efi, Resend, Google Sheets)
-  templates/      # Email templates
-  utils/          # Business day calculations
-api/
-  webhook.py      # Vercel serverless function for PIX webhooks
+  jobs/           # Tarefas agendadas (send_charges, process_receipts, send_reminders)
+  services/       # Integrações (Google Sheets, SMTP email)
+  templates/      # Templates de email HTML
+  utils/          # Cálculo de dias úteis, configurações
 ```
 
-## Requirements
+## Tech Stack
 
-- Python 3.9+
-- Efi (Gerencianet) account with PIX API access
-- Google Cloud service account with Sheets API enabled
-- Resend account for transactional emails
+| Componente     | Tecnologia           | Custo |
+|----------------|----------------------|-------|
+| Database       | Google Sheets        | Free  |
+| Formulário     | Google Forms         | Free  |
+| Cron Jobs      | GitHub Actions       | Free  |
+| Notificações   | Email (SMTP / Gmail) | Free  |
+| Linguagem      | Python 3.12+         | —     |
 
 ## Setup
 
-1. Install dependencies:
+1. Instalar dependências:
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Configure environment variables (see `.env.example`):
-   - `EFI_CLIENT_ID`, `EFI_CLIENT_SECRET`, `EFI_PIX_KEY`, `EFI_CERTIFICATE_BASE64`
+2. Configurar variáveis de ambiente (veja `.env.example`):
    - `GOOGLE_CREDENTIALS_BASE64`, `SPREADSHEET_ID`
-   - `RESEND_API_KEY`, `EMAIL_FROM`
+   - `PIX_KEY`, `PIX_KEY_TYPE`, `PIX_BENEFICIARY_NAME`
+   - `GOOGLE_FORM_URL`
+   - `SMTP_EMAIL`, `SMTP_PASSWORD`
 
-3. Deploy webhook to Vercel:
-   ```bash
-   vercel deploy
-   ```
+3. Criar Google Form com campos: Email, Nome Completo, Mês de Referência, Valor, Comprovante
+4. Conectar respostas do form à mesma planilha do `SPREADSHEET_ID`
 
-## Scheduled Jobs
+## Jobs Agendados
 
-Jobs run via GitHub Actions:
+Jobs rodam via GitHub Actions:
 
-| Job | Schedule | Description |
-|-----|----------|-------------|
-| `generate-charges` | 5th business day, 9am BRT | Creates PIX charges for unpaid members |
-| `process-payments` | Daily, 6am BRT | Reconciles received payments |
-| `daily-reminder` | Daily, 10am BRT | Sends payment reminders |
+| Job | Schedule | Descrição |
+|-----|----------|-----------|
+| `send-charges` | 5º dia útil, 9h BRT | Envia email de cobrança com chave PIX |
+| `process-receipts` | Diário, 8h BRT | Processa comprovantes do Google Form |
+| `send-reminders` | Diário, 10h BRT | Envia lembretes para inadimplentes |
+
+## GitHub Secrets Necessários
+
+```
+GOOGLE_CREDENTIALS_BASE64
+SPREADSHEET_ID
+SMTP_EMAIL
+SMTP_PASSWORD
+PIX_KEY
+GOOGLE_FORM_URL
+```
 
 ## License
 

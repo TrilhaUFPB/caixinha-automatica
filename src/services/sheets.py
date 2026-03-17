@@ -18,6 +18,18 @@ class Member:
     payment_status: dict[str, str]
 
 
+@dataclass
+class FormResponse:
+    timestamp: str
+    email: str
+    name: str
+    month: str
+    amount: str
+    receipt_url: str
+    processed: bool
+    row: int
+
+
 class SheetsService:
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -126,8 +138,7 @@ class SheetsService:
             unpaid_members = [
                 member
                 for member in members
-                if member.payment_status.get(month, "").lower() != "paid"
-                and member.payment_status.get(month, "").lower() != "pago"
+                if member.payment_status.get(month, "").lower() not in ("paid", "pago")
             ]
 
             logger.info(
@@ -138,43 +149,6 @@ class SheetsService:
         except Exception as e:
             logger.error(f"Failed to get unpaid members for {month}: {e}")
             raise
-
-    def save_txid_mapping(self, txid: str, member_name: str, month: str) -> None:
-        """Save a txid → member mapping in the 'txids' sheet for payment reconciliation."""
-        try:
-            spreadsheet = self._get_spreadsheet()
-            try:
-                worksheet = spreadsheet.worksheet("txids")
-            except gspread.WorksheetNotFound:
-                worksheet = spreadsheet.add_worksheet(title="txids", rows=1000, cols=4)
-                worksheet.append_row(["txid", "member", "month", "created_at"])
-                logger.info("Created 'txids' worksheet")
-
-            from datetime import datetime
-
-            worksheet.append_row([txid, member_name, month, datetime.now().isoformat()])
-            logger.info(f"Saved txid mapping: {txid} → {member_name} ({month})")
-        except Exception as e:
-            logger.error(f"Failed to save txid mapping: {e}")
-
-    def get_txid_mappings(self) -> dict:
-        """Get all txid → (member, month) mappings from the 'txids' sheet."""
-        try:
-            spreadsheet = self._get_spreadsheet()
-            try:
-                worksheet = spreadsheet.worksheet("txids")
-            except gspread.WorksheetNotFound:
-                return {}
-
-            records = worksheet.get_all_records()
-            return {
-                r["txid"]: {"member": r["member"], "month": r["month"]}
-                for r in records
-                if r.get("txid")
-            }
-        except Exception as e:
-            logger.error(f"Failed to get txid mappings: {e}")
-            return {}
 
     def mark_as_paid(
         self, name: str, month: str, sheet_name: str = "2026"
@@ -204,7 +178,7 @@ class SheetsService:
             name_cells = worksheet.col_values(name_col)
             row_num = None
             for idx, cell_name in enumerate(name_cells, start=1):
-                if cell_name == name:
+                if cell_name.strip().lower() == name.strip().lower():
                     row_num = idx
                     break
 
@@ -212,7 +186,7 @@ class SheetsService:
                 logger.error(f"Member not found: {name}")
                 raise ValueError(f"Member not found: {name}")
 
-            worksheet.update_cell(row_num, month_col, "Paid")
+            worksheet.update_cell(row_num, month_col, "Pago")
             logger.info(f"Marked {name} as paid for {month}")
             return True
 
@@ -221,4 +195,92 @@ class SheetsService:
             raise
         except Exception as e:
             logger.error(f"Failed to mark {name} as paid for {month}: {e}")
+            raise
+
+    def get_unprocessed_responses(
+        self, sheet_name: str = "Respostas do formulário 1"
+    ) -> list[FormResponse]:
+        """Read form responses that haven't been processed yet."""
+        try:
+            spreadsheet = self._get_spreadsheet()
+            worksheet = spreadsheet.worksheet(sheet_name)
+            all_values = worksheet.get_all_values()
+
+            if len(all_values) <= 1:
+                logger.info("No form responses found")
+                return []
+
+            headers = all_values[0]
+            responses = []
+
+            processed_col = None
+            for idx, header in enumerate(headers):
+                if header.lower().strip() == "processado":
+                    processed_col = idx
+                    break
+
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                is_processed = False
+                if processed_col is not None and processed_col < len(row):
+                    is_processed = row[processed_col].strip().lower() in ("processado", "sim", "yes", "true")
+
+                if is_processed:
+                    continue
+
+                timestamp = row[0] if len(row) > 0 else ""
+                email = row[1] if len(row) > 1 else ""
+                name = row[2] if len(row) > 2 else ""
+                month = row[3] if len(row) > 3 else ""
+                amount = row[4] if len(row) > 4 else ""
+                receipt_url = row[5] if len(row) > 5 else ""
+
+                if not timestamp:
+                    continue
+
+                responses.append(FormResponse(
+                    timestamp=timestamp,
+                    email=email.strip(),
+                    name=name.strip(),
+                    month=month.strip(),
+                    amount=amount.strip(),
+                    receipt_url=receipt_url,
+                    processed=False,
+                    row=row_idx,
+                ))
+
+            logger.info(f"Found {len(responses)} unprocessed form responses")
+            return responses
+
+        except gspread.WorksheetNotFound:
+            logger.error(f"Worksheet not found: {sheet_name}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get form responses: {e}")
+            raise
+
+    def mark_response_as_processed(
+        self, sheet_name: str, row: int, status: str = "Processado"
+    ) -> None:
+        """Mark a form response row as processed by writing to the next available column."""
+        try:
+            spreadsheet = self._get_spreadsheet()
+            worksheet = spreadsheet.worksheet(sheet_name)
+            headers = worksheet.row_values(1)
+
+            processed_col = None
+            for idx, header in enumerate(headers, start=1):
+                if header.lower().strip() == "processado":
+                    processed_col = idx
+                    break
+
+            if processed_col is None:
+                processed_col = len(headers) + 1
+                worksheet.update_cell(1, processed_col, "Processado")
+                logger.info(f"Created 'Processado' column at position {processed_col}")
+
+            worksheet.update_cell(row, processed_col, status)
+            logger.info(f"Marked row {row} as '{status}'")
+
+        except Exception as e:
+            logger.error(f"Failed to mark response as processed: {e}")
             raise

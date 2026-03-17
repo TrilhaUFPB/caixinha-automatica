@@ -1,4 +1,4 @@
-name: Generate Charges
+name: Send Charges
 
 on:
   schedule:
@@ -14,9 +14,9 @@ on:
         type: boolean
 
 jobs:
-  generate-charges:
+  send-charges:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,31 +31,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Setup Google credentials
-        run: |
-          echo "${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}" | base64 -d > credentials.json
-
-      - name: Setup Efí certificate
-        run: |
-          echo "${{ secrets.EFI_CERTIFICATE_BASE64 }}" | base64 -d > certificado.pem
-
-      - name: Run charge generation job
+      - name: Run charge email job
         env:
-          EFI_CLIENT_ID: ${{ secrets.EFI_CLIENT_ID }}
-          EFI_CLIENT_SECRET: ${{ secrets.EFI_CLIENT_SECRET }}
-          EFI_CERTIFICATE_PATH: certificado.pem
-          EFI_PIX_KEY: ${{ secrets.EFI_PIX_KEY }}
-          GOOGLE_CREDENTIALS_PATH: credentials.json
+          GOOGLE_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
           SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          PIX_KEY: ${{ secrets.PIX_KEY }}
+          PIX_KEY_TYPE: ${{ vars.PIX_KEY_TYPE || 'email' }}
+          PIX_BENEFICIARY_NAME: ${{ vars.PIX_BENEFICIARY_NAME || 'Trilha UFPB' }}
+          GOOGLE_FORM_URL: ${{ secrets.GOOGLE_FORM_URL }}
+          DEFAULT_CHARGE_AMOUNT: ${{ vars.DEFAULT_CHARGE_AMOUNT || '40.00' }}
+          TECPRED_CHARGE_AMOUNT: ${{ vars.TECPRED_CHARGE_AMOUNT || '25.00' }}
         run: |
           if [ "${{ github.event.inputs.force }}" = "true" ]; then
-            python -m src.jobs.generate_charges --force
+            python -m src.jobs.send_charges --force
           else
-            python -m src.jobs.generate_charges
+            python -m src.jobs.send_charges
           fi
-
-      - name: Cleanup credentials
-        if: always()
-        run: rm -f credentials.json certificado.pem

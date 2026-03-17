@@ -1,0 +1,38 @@
+name: Send Reminders
+
+on:
+  schedule:
+    # Runs at 13:00 UTC (10:00 AM BRT) from day 8 onwards
+    # (after charges are sent on the 5th business day)
+    - cron: '0 13 8-31 * *'
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run reminder job
+        env:
+          GOOGLE_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          PIX_KEY: ${{ secrets.PIX_KEY }}
+          GOOGLE_FORM_URL: ${{ secrets.GOOGLE_FORM_URL }}
+          DEFAULT_CHARGE_AMOUNT: ${{ vars.DEFAULT_CHARGE_AMOUNT || '40.00' }}
+          TECPRED_CHARGE_AMOUNT: ${{ vars.TECPRED_CHARGE_AMOUNT || '25.00' }}
+        run: python -m src.jobs.send_reminders

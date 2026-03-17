@@ -67,3 +67,23 @@ def get_current_month_column() -> str:
     today = date.today()
     month_name = get_month_name_pt(today.month)
     return month_name
+
+
+def get_months_up_to_current() -> list[str]:
+    """Return ordered list of month names from Janeiro up to (and including) the current month."""
+    today = date.today()
+    return [get_month_name_pt(m) for m in range(1, today.month + 1)]
+
+
+def get_unpaid_months(payment_status: dict[str, str], current_month: str) -> list[str]:
+    """Return list of months (before current) where the member hasn't paid."""
+    all_months = get_months_up_to_current()
+
+    unpaid = []
+    for month in all_months:
+        if month == current_month:
+            continue
+        status = str(payment_status.get(month, "")).strip().lower()
+        if status not in ("paid", "pago"):
+            unpaid.append(month)
+    return unpaid

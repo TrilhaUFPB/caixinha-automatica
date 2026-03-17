@@ -1,0 +1,36 @@
+name: Process Receipts
+
+on:
+  schedule:
+    # Daily at 11:00 UTC (8:00 AM BRT)
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  process-receipts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run receipt processing job
+        env:
+          GOOGLE_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_CREDENTIALS_BASE64 }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          SMTP_EMAIL: ${{ secrets.SMTP_EMAIL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          FORM_RESPONSES_SHEET_NAME: ${{ vars.FORM_RESPONSES_SHEET_NAME || 'Respostas do formulário 1' }}
+          DEFAULT_CHARGE_AMOUNT: ${{ vars.DEFAULT_CHARGE_AMOUNT || '40.00' }}
+          TECPRED_CHARGE_AMOUNT: ${{ vars.TECPRED_CHARGE_AMOUNT || '25.00' }}
+        run: python -m src.jobs.process_receipts

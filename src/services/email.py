@@ -1,8 +1,6 @@
-import base64
 import logging
 import os
 import smtplib
-from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -41,37 +39,15 @@ class EmailService:
             template = template.replace(f"{{{{{key}}}}}", str(value))
         return template
 
-    def _extract_image_data(self, data_uri: str) -> bytes:
-        """Extract raw image bytes from a data URI."""
-        if data_uri.startswith("data:"):
-            # Format: data:image/png;base64,<base64_data>
-            base64_data = data_uri.split(",", 1)[1]
-            return base64.b64decode(base64_data)
-        else:
-            # Assume it's already base64 without prefix
-            return base64.b64decode(data_uri)
-
-    def _send_email(
-        self, to: str, subject: str, html_content: str, qr_code_base64: Optional[str] = None
-    ) -> bool:
+    def _send_email(self, to: str, subject: str, html_content: str) -> bool:
         try:
-            msg = MIMEMultipart("related")
+            msg = MIMEMultipart("alternative")
             msg["Subject"] = subject
             msg["From"] = f"{self.from_name} <{self.smtp_email}>"
             msg["To"] = to
 
-            msg_alternative = MIMEMultipart("alternative")
-            msg.attach(msg_alternative)
-
             html_part = MIMEText(html_content, "html")
-            msg_alternative.attach(html_part)
-
-            if qr_code_base64:
-                image_data = self._extract_image_data(qr_code_base64)
-                image = MIMEImage(image_data, _subtype="png")
-                image.add_header("Content-ID", "<qrcode>")
-                image.add_header("Content-Disposition", "inline", filename="qrcode.png")
-                msg.attach(image)
+            msg.attach(html_part)
 
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
@@ -85,29 +61,50 @@ class EmailService:
             logger.error(f"Failed to send email to {to}: {e}")
             raise
 
+    @staticmethod
+    def _build_pending_months_html(pending_months: list[str]) -> str:
+        if not pending_months:
+            return ""
+
+        months_list = ", ".join(f"<strong>{m}</strong>" for m in pending_months)
+        return (
+            '<div style="background-color: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; '
+            'padding: 16px; margin-bottom: 25px; text-align: center;">'
+            '<p style="margin: 0 0 6px 0; font-size: 13px; color: #e65100;">Faturas em aberto:</p>'
+            f'<p style="margin: 0; font-size: 15px; color: #333;">{months_list}</p>'
+            '<p style="margin: 6px 0 0 0; font-size: 12px; color: #999;">'
+            'Pague os meses pendentes.</p>'
+            '</div>'
+        )
+
     def send_charge_email(
         self,
         to: str,
         name: str,
-        qr_code_base64: str,
-        pix_code: str,
+        pix_key: str,
+        pix_key_type: str,
+        beneficiary_name: str,
+        form_url: str,
         due_date: str,
         amount: str = "40.00",
+        pending_months: list[str] | None = None,
     ) -> dict:
         html_content = self._render_template(
             "charge_email.html",
             name=name,
-            qr_code_base64="cid:qrcode",
-            pix_code=pix_code,
+            pix_key=pix_key,
+            pix_key_type=pix_key_type,
+            beneficiary_name=beneficiary_name,
+            form_url=form_url,
             due_date=due_date,
             amount=amount,
+            pending_months_section=self._build_pending_months_html(pending_months or []),
         )
 
         self._send_email(
             to=to,
             subject=f"[Caixinha Trilha] Cobrança de R$ {amount}",
             html_content=html_content,
-            qr_code_base64=qr_code_base64,
         )
 
         logger.info(f"Charge email sent to {to}")
@@ -117,23 +114,24 @@ class EmailService:
         self,
         to: str,
         name: str,
-        qr_code_base64: str,
-        pix_code: str,
+        pix_key: str,
+        form_url: str,
         amount: str = "40.00",
+        pending_months: list[str] | None = None,
     ) -> dict:
         html_content = self._render_template(
             "reminder_email.html",
             name=name,
-            qr_code_base64="cid:qrcode",
-            pix_code=pix_code,
+            pix_key=pix_key,
+            form_url=form_url,
             amount=amount,
+            pending_months_section=self._build_pending_months_html(pending_months or []),
         )
 
         self._send_email(
             to=to,
             subject=f"[Caixinha Trilha] Lembrete de pagamento pendente - R$ {amount}",
             html_content=html_content,
-            qr_code_base64=qr_code_base64,
         )
 
         logger.info(f"Reminder email sent to {to}")

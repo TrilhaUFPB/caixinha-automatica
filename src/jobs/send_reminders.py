@@ -1,13 +1,13 @@
 import logging
+import os
 import sys
 from datetime import date
 
 sys.path.insert(0, str(__file__).rsplit("/src", 1)[0])
 
-from src.services.efi import EfiService
 from src.services.email import EmailService
 from src.services.sheets import SheetsService
-from src.utils.business_days import get_current_month_column, get_nth_business_day, is_business_day
+from src.utils.business_days import get_current_month_column, get_nth_business_day, get_unpaid_months, is_business_day
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,8 +15,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-CHARGE_AMOUNT = "40.00"
-TECPRED_CHARGE_AMOUNT = "25.00"
+CHARGE_AMOUNT = os.getenv("DEFAULT_CHARGE_AMOUNT", "40.00")
+TECPRED_CHARGE_AMOUNT = os.getenv("TECPRED_CHARGE_AMOUNT", "25.00")
 TECPRED_MEMBERS = {"malu quintela", "malu uchoa", "nicole", "joaquim"}
 
 
@@ -28,12 +28,10 @@ def run_send_reminders() -> dict:
     today = date.today()
     logger.info(f"Starting reminder job for {today}")
 
-    # Skip weekends and holidays
     if not is_business_day(today):
-        logger.info(f"Today ({today}) is not a business day (weekend or holiday). Skipping reminders.")
+        logger.info(f"Today ({today}) is not a business day. Skipping reminders.")
         return {"status": "skipped", "reason": "not_business_day", "reminders": 0}
 
-    # Check if we're past the 5th business day (when charges are sent)
     fifth_business_day = get_nth_business_day(today.year, today.month, n=5)
     if today <= fifth_business_day:
         logger.info(
@@ -45,8 +43,10 @@ def run_send_reminders() -> dict:
     month_column = get_current_month_column()
     logger.info(f"Looking for unpaid members in column: {month_column}")
 
+    pix_key = os.getenv("PIX_KEY", "")
+    form_url = os.getenv("GOOGLE_FORM_URL", "")
+
     sheets_service = SheetsService()
-    efi_service = EfiService()
     email_service = EmailService()
 
     try:
@@ -77,22 +77,17 @@ def run_send_reminders() -> dict:
 
         try:
             amount = get_charge_amount(member.name)
-            logger.info(f"Processing member: {member.name} ({member.email}), amount: R${amount}")
+            logger.info(f"Sending reminder to: {member.name} ({member.email}), amount: R${amount}")
 
-            charge = efi_service.create_pix_charge(
-                valor=amount,
-                nome_devedor=member.name,
-                descricao=f"Caixinha Trilha - {month_column}",
-            )
-
-            logger.info(f"Created/retrieved charge for {member.name}: txid={charge.txid}")
+            pending = get_unpaid_months(member.payment_status, month_column)
 
             email_service.send_reminder_email(
                 to=member.email,
                 name=member.name,
-                qr_code_base64=charge.qr_code_base64,
-                pix_code=charge.copy_paste_code,
+                pix_key=pix_key,
+                form_url=form_url,
                 amount=amount,
+                pending_months=pending,
             )
 
             logger.info(f"Reminder email sent to {member.email}")
@@ -101,7 +96,6 @@ def run_send_reminders() -> dict:
             results.append({
                 "name": member.name,
                 "email": member.email,
-                "txid": charge.txid,
                 "status": "success",
             })
 
