@@ -230,8 +230,8 @@ class SheetsService:
                 timestamp = row[0] if len(row) > 0 else ""
                 email = row[1] if len(row) > 1 else ""
                 name = row[2] if len(row) > 2 else ""
-                month = row[3] if len(row) > 3 else ""
-                amount = row[4] if len(row) > 4 else ""
+                amount = row[3] if len(row) > 3 else ""
+                month = row[4] if len(row) > 4 else ""
                 receipt_url = row[5] if len(row) > 5 else ""
 
                 if not timestamp:
